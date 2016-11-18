@@ -1,18 +1,12 @@
 open System
 
-type Polar = {
-    Radius: float
-    Theta: float
-}
+type Coordinate =
+    | Polar of Radius:float * Theta:float
+    | Cartesian of X:float * Y:float
 
-type Cartesian ={
-    X: float
-    Y: float
-}
-
-type PolarMessage = {
-    ReplyChannel: AsyncReplyChannel<Cartesian>
-    Polar: Polar
+type Message = {
+    ReplyChannel: AsyncReplyChannel<Coordinate>
+    Coordinate: Coordinate
 }
 
 let prompt = 
@@ -24,15 +18,17 @@ let prompt =
     |> sprintf "Enter a radius and an angle (in degrees) or %s to quit."
 
 let polarToCartesianSolver = 
-    MailboxProcessor<PolarMessage>.Start(fun inbox ->
+    MailboxProcessor<Message>.Start(fun inbox ->
         let rec msgLoop () = async {
             let! msg = inbox.Receive ()
-            let polar = msg.Polar
-            let angle = polar.Theta * Math.PI / 180.0
-            { // Cartesian record
-                X=polar.Radius * Math.Cos angle
-                Y = polar.Radius * Math.Sin angle
-            } |> msg.ReplyChannel.Reply
+            match msg.Coordinate with
+            | Polar (radius, theta) ->
+                let angle = theta * Math.PI / 180.0
+                Cartesian (X=radius * Math.Cos angle, Y=radius * Math.Sin angle)
+                |> msg.ReplyChannel.Reply
+            | Cartesian (x, y) -> 
+                Polar (Radius=sqrt (x**2.0 + y**2.0), Theta=atan (y/x) * 180.0 / Math.PI)
+                |> msg.ReplyChannel.Reply
             do! msgLoop ()
         }
         msgLoop ()
@@ -40,7 +36,7 @@ let polarToCartesianSolver =
 
 let atof = System.Single.Parse >> float
 
-let interact (solver:MailboxProcessor<PolarMessage>) =
+let interact (solver:MailboxProcessor<Message>) =
     while true do
         printf "Radius and angle: "
         match Console.ReadLine () with
@@ -48,10 +44,11 @@ let interact (solver:MailboxProcessor<PolarMessage>) =
         | line -> 
             match line.Split ([|' '|], StringSplitOptions.RemoveEmptyEntries) with 
             | [|radius; angle|] -> 
-                let polar = { Radius=radius |> atof; Theta=angle |> atof }
-                let buildMsg = fun channel -> { PolarMessage.Polar=polar; ReplyChannel=channel }
-                let cartesian = solver.PostAndReply buildMsg
-                printfn "Polar radius=%.02f theta=%.02f degrees Cartesian x=%.02f y=%.02f" polar.Radius polar.Theta cartesian.X cartesian.Y
+                let coordinate = Polar (Radius=atof radius, Theta=atof angle)
+                let buildMsg coord = fun channel -> { Message.Coordinate=coord; ReplyChannel=channel }
+                let translated = buildMsg coordinate |> solver.PostAndReply
+                let andBack = buildMsg translated |> solver.PostAndReply
+                printfn "Original: %A Translated: %A Back: %A" coordinate translated andBack
             | _ -> printfn "invalid input"
 
 
