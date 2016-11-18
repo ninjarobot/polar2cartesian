@@ -30,8 +30,8 @@ let polarToCartesianSolver =
             let polar = msg.Polar
             let angle = polar.Theta * Math.PI / 180.0
             { // Cartesian record
-                X=polar.Radius * Math.Cos(angle)
-                Y = polar.Radius * Math.Sin(angle)
+                X=polar.Radius * Math.Cos angle
+                Y = polar.Radius * Math.Sin angle
             } |> msg.ReplyChannel.Reply
             do! msgLoop ()
         }
@@ -46,7 +46,7 @@ let interact (solver:MailboxProcessor<PolarMessage>) =
         match Console.ReadLine () with
         | null -> () // ignore null
         | line -> 
-            match line.Split([|' '|], StringSplitOptions.RemoveEmptyEntries) with 
+            match line.Split ([|' '|], StringSplitOptions.RemoveEmptyEntries) with 
             | [|radius; angle|] -> 
                 let polar = { Radius=radius |> atof; Theta=angle |> atof }
                 let buildMsg = fun channel -> { PolarMessage.Polar=polar; ReplyChannel=channel }
