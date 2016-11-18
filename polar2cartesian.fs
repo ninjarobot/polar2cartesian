@@ -50,8 +50,8 @@ let interact (solver:MailboxProcessor<PolarMessage>) =
             | [|radius; angle|] -> 
                 let polar = { Radius=radius |> atof; Theta=angle |> atof }
                 let buildMsg = fun channel -> { PolarMessage.Polar=polar; ReplyChannel=channel }
-                let reply = solver.PostAndReply buildMsg
-                printfn "Polar radius=%.02f theta=%.02f degrees Cartesian x=%.02f y=%.02f" polar.Radius polar.Theta reply.X reply.Y
+                let cartesian = solver.PostAndReply buildMsg
+                printfn "Polar radius=%.02f theta=%.02f degrees Cartesian x=%.02f y=%.02f" polar.Radius polar.Theta cartesian.X cartesian.Y
             | _ -> printfn "invalid input"
 
 
