@@ -1,65 +1,62 @@
 open System
 
-type Polar = float * float
+type Polar = {
+    Radius: float
+    Theta: float
+}
 
-type Cartesian = float * float
+type Cartesian ={
+    X: float
+    Y: float
+}
+
+type PolarMessage = {
+    ReplyChannel: AsyncReplyChannel<Cartesian>
+    Polar: Polar
+}
 
 let prompt = 
     match Environment.OSVersion.Platform with 
-    | PlatformID.Unix | PlatformID.MacOSX -> // Linux / OS Xml
-        "Ctrl+D"
+    | PlatformID.Unix | PlatformID.MacOSX -> // Linux / OS X
+        "Ctrl+C"
     | _ ->
         "Ctrl+C, Enter"
     |> sprintf "Enter a radius and an angle (in degrees) or %s to quit."
 
-let createSolver postResponse = 
-    printfn "About to start solver."
-    MailboxProcessor.Start(fun inbox ->
-        printfn "About to start solver loop."
+let polarToCartesianSolver = 
+    MailboxProcessor<PolarMessage>.Start(fun inbox ->
         let rec msgLoop () = async {
-            printfn "Waiting for polar."
-            let! (polar:Polar) = inbox.Receive ()
-            let radius, theta = polar
-            let angle = theta * Math.PI / 180.0
-            let x = radius * Math.Cos(angle)
-            let y = radius * Math.Sin(angle)
-            (x, y) |> postResponse
+            let! msg = inbox.Receive ()
+            let polar = msg.Polar
+            let angle = polar.Theta * Math.PI / 180.0
+            { // Cartesian record
+                X=polar.Radius * Math.Cos(angle)
+                Y = polar.Radius * Math.Sin(angle)
+            } |> msg.ReplyChannel.Reply
             do! msgLoop ()
         }
         msgLoop ()
     )
 
-let answers sendAnswer =
-    MailboxProcessor.Start(fun inbox ->
-        printfn "About to start answer loop"
-        let rec msgLoop () = async {
-            printfn "Waiting for cartesian."
-            let! (cartesian:Cartesian) = inbox.Receive()
-            cartesian |> sendAnswer
-            do! msgLoop ()
-        }
-        msgLoop ()
-    )
+let atof = System.Single.Parse >> float
 
-let strToFloat = System.Single.Parse >> float
-
-printfn "Creating answer agent"
-let answerAgent = answers (fun c -> printfn "%A" c)
-printfn "Creating question agent, passing answer agent."
-let questionAgent = createSolver (fun c -> c |> answerAgent.Post)
-
-let interact (questions:MailboxProcessor<Polar>) (answers:MailboxProcessor<Cartesian>) =
-    printfn "Starting interaction between agents."
+let interact (solver:MailboxProcessor<PolarMessage>) =
     while true do
-        let line = Console.ReadLine().Split(' ')
-        match line with 
-        | [|radius; angle|] -> 
-            (radius |> strToFloat, angle |> strToFloat)
-            |> questions.Post
-        | _ -> printfn "Invalid input."
+        printf "Radius and angle: "
+        match Console.ReadLine () with
+        | null -> () // ignore null
+        | line -> 
+            match line.Split([|' '|], StringSplitOptions.RemoveEmptyEntries) with 
+            | [|radius; angle|] -> 
+                let polar = { Radius=radius |> atof; Theta=angle |> atof }
+                let buildMsg = fun channel -> { PolarMessage.Polar=polar; ReplyChannel=channel }
+                let reply = solver.PostAndReply buildMsg
+                printfn "Polar radius=%.02f theta=%.02f degrees Cartesian x=%.02f y=%.02f" polar.Radius polar.Theta reply.X reply.Y
+            | _ -> printfn "invalid input"
 
 
 [<EntryPoint>]
 let main argv =
-    interact questionAgent answerAgent
+    printfn "%s" prompt
+    interact polarToCartesianSolver
     0
