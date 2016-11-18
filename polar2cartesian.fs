@@ -59,4 +59,7 @@ let interact (questions:MailboxProcessor<Polar>) (answers:MailboxProcessor<Carte
         | _ -> printfn "Invalid input."
 
 
-interact questionAgent answerAgent
+[<EntryPoint>]
+let main argv =
+    interact questionAgent answerAgent
+    0
