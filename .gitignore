@@ -1,2 +1,4 @@
 polar2cartesian
 *.exe
+bin/
+pkg/
